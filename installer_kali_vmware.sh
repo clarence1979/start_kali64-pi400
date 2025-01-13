@@ -19,6 +19,7 @@ rm -f packages.microsoft.gpg
 sudo apt install apt-transport-https
 sudo apt update
 sudo apt install code # or code-insiders
+sudo pip install ipykernel
 
 cd ~
 cd /home/kali/Desktop 
