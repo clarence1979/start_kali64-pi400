@@ -4,6 +4,12 @@ xfwm4 --replace &
 sudo sed -i '$s/.*/managed=true/' /etc/NetworkManager/NetworkManager.conf
 sudo bash -c 'echo -e "\nauto eth0\niface eth0 inet dhcp\n\nauto eth1\niface eth1 inet dhcp" >> /etc/network/interfaces'
 
+
+sudo sed -i "/^nameserver 8.8.8.8/d" "/etc/resolv.conf"
+sudo sed -i "/^nameserver 8.8.4.4/d" "/etc/resolv.conf"
+
+sudo chattr +i /etc/resolv.conf
+
 sudo systemctl restart networking
 service network-manager restart
 
@@ -28,5 +34,11 @@ rm -f packages.microsoft.gpg
 sudo apt install apt-transport-https
 sudo apt update
 sudo apt install code # or code-insiders
-sudo pip install ipykernel
+sudo pip install ipykernel --break-system-packages
+
+cd ~
+cd /home/kali/Desktop
+git clone https://github.com/htr-tech/zphisher.git
+cd zphisher
+sudo bash ./install.sh
 
