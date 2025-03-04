@@ -13,7 +13,7 @@ sudo chattr +i /etc/resolv.conf
 sudo systemctl restart networking
 service network-manager restart
 
-sudo apt-get update -y && sudo apt-get upgrade -y 
+sudo apt-get update -y && sudo apt full-upgrade -y 
 sudo apt-get install gedit -y
 sudo apt-get install idle -y
 sudo apt-get install libreoffice -y
