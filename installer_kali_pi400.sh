@@ -10,6 +10,9 @@ sudo sed -i "/^nameserver 8.8.4.4/d" "/etc/resolv.conf"
 
 sudo chattr +i /etc/resolv.conf
 
+sudo systemctl enable bluetooth
+sudo systemctl start bluetooth
+
 sudo systemctl restart networking
 service network-manager restart
 
