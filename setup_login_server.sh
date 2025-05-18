@@ -20,31 +20,6 @@ sudo systemctl enable mariadb
 sudo systemctl status mariadb
 
 
-
-echo "[+] Initializing MariaDB (or upgrading if already exists)..."
-if [ -d /var/lib/mysql/mysql ]; then
-    echo "[✓] MariaDB already initialized. Running mariadb-upgrade..."
-    sudo mariadb-upgrade -u root --skip-write-binlog || true
-else
-    echo "[+] Running initial setup..."
-    sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
-fi
-
-echo "[+] Resetting root password safely..."
-sudo mysqld_safe --skip-grant-tables & sleep 5
-
-mysql -u root <<EOF
-FLUSH PRIVILEGES;
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';
-EOF
-
-echo "[+] Restarting MariaDB normally..."
-sudo pkill -f mysqld_safe || true
-sudo pkill -f mariadbd || true
-sleep 2
-sudo systemctl start mariadb
-sudo systemctl enable mariadb
-
 echo "[+] Creating login_db and admin user..."
 HASHED_PASS=$(php -r "echo password_hash('admin123', PASSWORD_DEFAULT);")
 mysql -u root -proot <<EOF
