@@ -4,22 +4,22 @@ set -e
 echo "[+] Updating packages..."
 sudo apt update
 
-echo "[+] Installing Apache2, PHP, MariaDB, and required PHP extensions..."
+echo "[+] Installing Apache2, PHP, MariaDB, and extensions..."
 sudo apt install apache2 php libapache2-mod-php php-mysql mariadb-server unzip -y
 
-echo "[+] Purging old MariaDB config and data (if any)..."
+echo "[+] Resetting any broken MariaDB configs..."
 sudo systemctl stop mariadb || true
 sudo killall -9 mariadbd mysqld mysqld_safe 2>/dev/null || true
 sudo rm -rf /etc/mysql /var/lib/mysql /var/log/mysql /var/run/mysqld
 sudo mkdir -p /etc/mysql/conf.d /etc/mysql/mariadb.conf.d
 
-echo "[+] Reinstalling MariaDB fresh..."
+echo "[+] Reinstalling MariaDB cleanly..."
 sudo apt install --reinstall mariadb-server -y
 
 echo "[+] Initializing MariaDB..."
 sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
 
-echo "[+] Starting MariaDB in password reset mode..."
+echo "[+] Starting MariaDB in skip-grant-tables mode..."
 sudo mysqld_safe --skip-grant-tables & sleep 5
 
 echo "[+] Resetting root password..."
@@ -28,21 +28,21 @@ FLUSH PRIVILEGES;
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';
 EOF
 
-echo "[+] Restarting MariaDB in normal mode..."
+echo "[+] Restarting MariaDB normally..."
 sudo killall -9 mariadbd mysqld mysqld_safe
 sleep 2
 sudo systemctl start mariadb
 sudo systemctl enable mariadb
 
-echo "[+] Creating login_db and users table..."
+echo "[+] Creating database and inserting default user..."
 HASHED_PASS=$(php -r "echo password_hash('admin123', PASSWORD_DEFAULT);")
 mysql -u root -proot <<EOF
 CREATE DATABASE IF NOT EXISTS login_db;
 USE login_db;
 CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL
 );
 DELETE FROM users WHERE username='admin';
 INSERT INTO users (username, password) VALUES ('admin', '$HASHED_PASS');
@@ -52,6 +52,10 @@ echo "[+] Setting up web app in /var/www/html/login..."
 sudo mkdir -p /var/www/html/login
 sudo chown -R $USER:www-data /var/www/html/login
 sudo chmod -R 755 /var/www/html/login
+
+echo "[+] Making localhost redirect to login page..."
+sudo rm -f /var/www/html/index.html
+echo '<meta http-equiv="refresh" content="0; URL=login/login.html">' | sudo tee /var/www/html/index.html > /dev/null
 
 echo "[+] Writing db_config.php..."
 cat <<'PHP' | sudo tee /var/www/html/login/db_config.php > /dev/null
@@ -87,7 +91,7 @@ cat <<'HTML' | sudo tee /var/www/html/login/login.html > /dev/null
 </html>
 HTML
 
-echo "[+] Writing login.php..."
+echo "[+] Writing login.php with session and redirect..."
 cat <<'PHP' | sudo tee /var/www/html/login/login.php > /dev/null
 <?php
 session_start();
@@ -96,12 +100,14 @@ require 'db_config.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'];
     $password = $_POST['password'];
+
     $stmt = $pdo->prepare("SELECT password FROM users WHERE username = ?");
     $stmt->execute([$username]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($user && password_verify($password, $user['password'])) {
-        header("Location: dashboard.html");
+        $_SESSION['logged_in'] = true;
+        header("Location: dashboard.php");
         exit();
     } else {
         echo "Invalid username or password.";
@@ -110,8 +116,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 PHP
 
-echo "[+] Writing dashboard.html..."
-cat <<'HTML' | sudo tee /var/www/html/login/dashboard.html > /dev/null
+echo "[+] Writing dashboard.php with session protection..."
+cat <<'PHP' | sudo tee /var/www/html/login/dashboard.php > /dev/null
+<?php
+session_start();
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    header("Location: login.html");
+    exit();
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -184,9 +197,9 @@ cat <<'HTML' | sudo tee /var/www/html/login/dashboard.html > /dev/null
     </script>
 </body>
 </html>
-HTML
+PHP
 
 echo "[+] Restarting Apache..."
 sudo systemctl restart apache2
 
-echo "[✓] Setup complete! Visit: http://localhost/login/login.html"
+echo "[✓] Setup complete. Open http://localhost/ in your browser to test login!"
