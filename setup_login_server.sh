@@ -7,12 +7,19 @@ sudo apt update
 echo "[+] Installing Apache2, PHP, MariaDB, and required extensions..."
 sudo apt install apache2 php libapache2-mod-php php-mysql mariadb-server unzip -y
 
-echo "[+] Cleaning broken MariaDB state (if any)..."
 sudo systemctl stop mariadb || true
 sudo killall -9 mariadbd mysqld mysqld_safe 2>/dev/null || true
+sudo apt purge mariadb-server mariadb-client mariadb-common -y
+sudo apt autoremove --purge -y
+sudo rm -rf /etc/mysql /var/lib/mysql /var/log/mysql /var/run/mysqld
+sudo mkdir -p /etc/mysql/conf.d /etc/mysql/mariadb.conf.d
+sudo apt update
+sudo apt install mariadb-server -y
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
+sudo systemctl status mariadb
 
-echo "[+] Reinstalling MariaDB..."
-sudo apt install --reinstall mariadb-server -y
+
 
 echo "[+] Initializing MariaDB (or upgrading if already exists)..."
 if [ -d /var/lib/mysql/mysql ]; then
