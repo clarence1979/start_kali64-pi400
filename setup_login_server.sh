@@ -7,30 +7,27 @@ sudo apt update
 echo "[+] Installing Apache2, PHP, and MariaDB..."
 sudo apt install apache2 php libapache2-mod-php php-mysql mariadb-server unzip -y
 
-echo "[+] Stopping any running MariaDB/MySQL processes..."
+echo "[+] Killing any existing MySQL/MariaDB processes..."
 sudo killall -9 mariadbd mysqld mysqld_safe 2>/dev/null || true
 
-echo "[+] Initializing MariaDB if needed..."
+echo "[+] Initializing MariaDB..."
 sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql || true
 
-echo "[+] Starting MariaDB in recovery mode to reset root password..."
+echo "[+] Resetting MariaDB root password safely..."
+sudo systemctl stop mariadb
 sudo mysqld_safe --skip-grant-tables & sleep 5
 
-echo "[+] Resetting root password to 'root'..."
 mysql -u root <<EOF
 FLUSH PRIVILEGES;
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';
 EOF
 
-echo "[+] Stopping recovery mode MariaDB..."
-sudo killall -9 mariadbd mysqld mysqld_safe || true
+sudo killall -9 mariadbd mysqld mysqld_safe
 sleep 2
-
-echo "[+] Starting MariaDB normally..."
 sudo systemctl start mariadb
 sudo systemctl enable mariadb
 
-echo "[+] Creating database and user table..."
+echo "[+] Creating login_db and users table..."
 hashed_pass=$(php -r "echo password_hash('admin123', PASSWORD_DEFAULT);")
 mysql -uroot -proot <<EOF
 CREATE DATABASE IF NOT EXISTS login_db;
@@ -44,7 +41,7 @@ DELETE FROM users WHERE username='admin';
 INSERT INTO users (username, password) VALUES ('admin', '$hashed_pass');
 EOF
 
-echo "[+] Creating /var/www/html/login..."
+echo "[+] Creating web directory at /var/www/html/login..."
 sudo mkdir -p /var/www/html/login
 sudo chown -R $USER:www-data /var/www/html/login
 sudo chmod -R 755 /var/www/html/login
@@ -106,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 PHP
 
-echo "[+] Writing dashboard.html..."
+echo "[+] Writing dashboard.html (IP viewer)..."
 cat <<'HTML' | sudo tee /var/www/html/login/dashboard.html > /dev/null
 <!DOCTYPE html>
 <html lang="en">
@@ -185,4 +182,4 @@ HTML
 echo "[+] Restarting Apache..."
 sudo systemctl restart apache2
 
-echo "[✓] Setup complete. Visit: http://localhost/login/login.html"
+echo "[✓] Setup complete! Open: http://localhost/login/login.html"
