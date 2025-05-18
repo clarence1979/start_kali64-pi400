@@ -32,3 +32,72 @@ CREATE TABLE IF NOT EXISTS users (
 DELETE FROM users WHERE username='admin';
 INSERT INTO users (username, password) VALUES ('admin', '$hashed_pass');
 EOF
+
+echo "[+] Creating /var/www/html/login directory..."
+
+if [ ! -d /var/www/html ]; then
+    echo "[-] Apache web root not found. Is Apache installed correctly?"
+    exit 1
+fi
+
+sudo mkdir -p /var/www/html/login
+sudo chown -R $USER:www-data /var/www/html/login
+sudo chmod -R 755 /var/www/html/login
+
+echo "[+] Writing db_config.php..."
+cat <<'PHP' | sudo tee /var/www/html/login/db_config.php > /dev/null
+<?php
+$host = 'localhost';
+$db = 'login_db';
+$user = 'root';
+$pass = 'root';
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Database connection failed: " . $e->getMessage());
+}
+?>
+PHP
+
+echo "[+] Writing login.html..."
+cat <<'HTML' | sudo tee /var/www/html/login/login.html > /dev/null
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+    <h2>Login Page</h2>
+    <form method="post" action="login.php">
+        Username: <input type="text" name="username" required><br><br>
+        Password: <input type="password" name="password" required><br><br>
+        <input type="submit" value="Login">
+    </form>
+</body>
+</html>
+HTML
+
+echo "[+] Writing login.php..."
+cat <<'PHP' | sudo tee /var/www/html/login/login.php > /dev/null
+<?php
+require 'db_config.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = $_POST['username'];
+    $password = $_POST['password'];
+    $stmt = $pdo->prepare("SELECT password FROM users WHERE username = ?");
+    $stmt->execute([$username]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($user && password_verify($password, $user['password'])) {
+        echo "Login successful. Welcome, $username!";
+    } else {
+        echo "Invalid username or password.";
+    }
+}
+?>
+PHP
+
+echo "[+] Restarting Apache..."
+sudo systemctl restart apache2
+
+echo "[✓] Setup complete. Visit http://localhost/login/login.html in your browser."
