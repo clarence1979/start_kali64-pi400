@@ -7,23 +7,19 @@ sudo apt update
 echo "[+] Installing Apache2, PHP, MariaDB, and required extensions..."
 sudo apt install apache2 php libapache2-mod-php php-mysql mariadb-server unzip -y
 
-sudo systemctl stop mariadb || true
-sudo killall -9 mariadbd mysqld mysqld_safe 2>/dev/null || true
-sudo apt purge mariadb-server mariadb-client mariadb-common -y
-sudo apt autoremove --purge -y
-sudo rm -rf /etc/mysql /var/lib/mysql /var/log/mysql /var/run/mysqld
-sudo mkdir -p /etc/mysql/conf.d /etc/mysql/mariadb.conf.d
-sudo apt update
-sudo apt install mariadb-server -y
-sudo systemctl start mariadb
+# Start MariaDB normally
 sudo systemctl enable mariadb
-sudo systemctl status mariadb
+sudo systemctl start mariadb
 
-
+# Create secure MariaDB user and login DB
 echo "[+] Creating login_db and admin user..."
 HASHED_PASS=$(php -r "echo password_hash('admin123', PASSWORD_DEFAULT);")
-mysql -u root -proot <<EOF
+
+sudo mysql <<EOF
 CREATE DATABASE IF NOT EXISTS login_db;
+CREATE USER IF NOT EXISTS 'webadmin'@'localhost' IDENTIFIED BY 'webpass';
+GRANT ALL PRIVILEGES ON login_db.* TO 'webadmin'@'localhost';
+FLUSH PRIVILEGES;
 USE login_db;
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -34,22 +30,23 @@ DELETE FROM users WHERE username='admin';
 INSERT INTO users (username, password) VALUES ('admin', '$HASHED_PASS');
 EOF
 
+# Setup web root
 echo "[+] Preparing web root..."
 sudo mkdir -p /var/www/html/login
-sudo chown -R $USER:www-data /var/www/html/login
+sudo chown -R \$USER:www-data /var/www/html/login
 sudo chmod -R 755 /var/www/html/login
 
+# Redirect / to login page
 echo "[+] Redirecting localhost to login page..."
-sudo rm -f /var/www/html/index.html
 echo '<meta http-equiv="refresh" content="0; URL=login/login.html">' | sudo tee /var/www/html/index.html > /dev/null
 
-echo "[+] Writing db_config.php..."
+# Write db_config.php
 cat <<'PHP' | sudo tee /var/www/html/login/db_config.php > /dev/null
 <?php
 $host = '127.0.0.1';
 $db = 'login_db';
-$user = 'root';
-$pass = 'root';
+$user = 'webadmin';
+$pass = 'webpass';
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8", $user, $pass);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -59,7 +56,7 @@ try {
 ?>
 PHP
 
-echo "[+] Writing login.html..."
+# Write login.html
 cat <<'HTML' | sudo tee /var/www/html/login/login.html > /dev/null
 <!DOCTYPE html>
 <html>
@@ -75,7 +72,7 @@ cat <<'HTML' | sudo tee /var/www/html/login/login.html > /dev/null
 </html>
 HTML
 
-echo "[+] Writing login.php with session..."
+# Write login.php
 cat <<'PHP' | sudo tee /var/www/html/login/login.php > /dev/null
 <?php
 session_start();
@@ -100,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 PHP
 
-echo "[+] Writing dashboard.php with login protection..."
+# Write dashboard.php
 cat <<'PHP' | sudo tee /var/www/html/login/dashboard.php > /dev/null
 <?php
 session_start();
