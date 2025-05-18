@@ -33,7 +33,7 @@ EOF
 # Setup web root
 echo "[+] Preparing web root..."
 sudo mkdir -p /var/www/html/login
-sudo chown -R \$USER:www-data /var/www/html/login
+sudo chown -R $USER:www-data /var/www/html/login
 sudo chmod -R 755 /var/www/html/login
 
 # Redirect / to login page
