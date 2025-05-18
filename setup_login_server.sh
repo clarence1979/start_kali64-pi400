@@ -36,9 +36,9 @@ sudo mkdir -p /var/www/html/login
 sudo chown -R $USER:www-data /var/www/html/login
 sudo chmod -R 755 /var/www/html/login
 
-# Redirect / to login page
-echo "[+] Redirecting localhost to login page..."
-echo '<meta http-equiv="refresh" content="0; URL=login/login.html">' | sudo tee /var/www/html/index.html > /dev/null
+# Redirect / to login page using PHP redirect
+echo "[+] Creating index.php redirect to login page..."
+echo '<?php header("Location: /login/login.html"); exit(); ?>' | sudo tee /var/www/html/index.php > /dev/null
 
 # Write db_config.php
 cat <<'PHP' | sudo tee /var/www/html/login/db_config.php > /dev/null
@@ -97,6 +97,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 PHP
 
+# Write logout.php
+cat <<'PHP' | sudo tee /var/www/html/login/logout.php > /dev/null
+<?php
+session_start();
+session_unset();
+session_destroy();
+header("Location: login.html");
+exit();
+?>
+PHP
+
 # Write dashboard.php
 cat <<'PHP' | sudo tee /var/www/html/login/dashboard.php > /dev/null
 <?php
@@ -126,6 +137,7 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
         <p><strong>Location:</strong> <span id="location">Detecting...</span></p>
     </div>
     <div id="map"></div>
+    <p><a href="logout.php">Logout</a></p>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
