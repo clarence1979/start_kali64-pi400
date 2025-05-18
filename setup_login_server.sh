@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 echo "[+] Updating packages..."
@@ -8,23 +7,32 @@ sudo apt update
 echo "[+] Installing Apache2, PHP, and MariaDB..."
 sudo apt install apache2 php libapache2-mod-php php-mysql mariadb-server unzip -y
 
-echo "[+] Killing any rogue MySQL processes..."
-sudo killall -9 mysqld mariadbd 2>/dev/null || true
+echo "[+] Stopping any running MariaDB/MySQL processes..."
+sudo killall -9 mariadbd mysqld mysqld_safe 2>/dev/null || true
 
-echo "[+] Cleaning broken installs..."
-sudo dpkg --configure -a
-sudo apt --fix-broken install -y
+echo "[+] Initializing MariaDB if needed..."
+sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql || true
 
-echo "[+] Starting MariaDB service..."
-sudo systemctl start mariadb || true
+echo "[+] Starting MariaDB in recovery mode to reset root password..."
+sudo mysqld_safe --skip-grant-tables & sleep 5
+
+echo "[+] Resetting root password to 'root'..."
+mysql -u root <<EOF
+FLUSH PRIVILEGES;
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';
+EOF
+
+echo "[+] Stopping recovery mode MariaDB..."
+sudo killall -9 mariadbd mysqld mysqld_safe || true
+sleep 2
+
+echo "[+] Starting MariaDB normally..."
+sudo systemctl start mariadb
 sudo systemctl enable mariadb
 
-echo "[+] Setting MariaDB root password (MariaDB >=10.4)..."
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root'; FLUSH PRIVILEGES;"
-
-echo "[+] Creating database and table..."
+echo "[+] Creating database and user table..."
 hashed_pass=$(php -r "echo password_hash('admin123', PASSWORD_DEFAULT);")
-sudo mysql -uroot -proot <<EOF
+mysql -uroot -proot <<EOF
 CREATE DATABASE IF NOT EXISTS login_db;
 USE login_db;
 CREATE TABLE IF NOT EXISTS users (
@@ -36,7 +44,7 @@ DELETE FROM users WHERE username='admin';
 INSERT INTO users (username, password) VALUES ('admin', '$hashed_pass');
 EOF
 
-echo "[+] Creating web directory at /var/www/html/login..."
+echo "[+] Creating /var/www/html/login..."
 sudo mkdir -p /var/www/html/login
 sudo chown -R $USER:www-data /var/www/html/login
 sudo chmod -R 755 /var/www/html/login
@@ -98,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 PHP
 
-echo "[+] Writing dashboard.html (IP and location viewer)..."
+echo "[+] Writing dashboard.html..."
 cat <<'HTML' | sudo tee /var/www/html/login/dashboard.html > /dev/null
 <!DOCTYPE html>
 <html lang="en">
@@ -177,4 +185,4 @@ HTML
 echo "[+] Restarting Apache..."
 sudo systemctl restart apache2
 
-echo "[✓] Setup complete! Visit: http://localhost/login/login.html"
+echo "[✓] Setup complete. Visit: http://localhost/login/login.html"
