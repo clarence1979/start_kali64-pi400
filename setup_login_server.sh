@@ -4,37 +4,41 @@ set -e
 echo "[+] Updating packages..."
 sudo apt update
 
-echo "[+] Installing Apache2, PHP, MariaDB, and extensions..."
+echo "[+] Installing Apache2, PHP, MariaDB, and required extensions..."
 sudo apt install apache2 php libapache2-mod-php php-mysql mariadb-server unzip -y
 
-echo "[+] Resetting any broken MariaDB configs..."
+echo "[+] Cleaning broken MariaDB state (if any)..."
 sudo systemctl stop mariadb || true
 sudo killall -9 mariadbd mysqld mysqld_safe 2>/dev/null || true
-sudo rm -rf /etc/mysql /var/lib/mysql /var/log/mysql /var/run/mysqld
-sudo mkdir -p /etc/mysql/conf.d /etc/mysql/mariadb.conf.d
 
-echo "[+] Reinstalling MariaDB cleanly..."
+echo "[+] Reinstalling MariaDB..."
 sudo apt install --reinstall mariadb-server -y
 
-echo "[+] Initializing MariaDB..."
-sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
+echo "[+] Initializing MariaDB (or upgrading if already exists)..."
+if [ -d /var/lib/mysql/mysql ]; then
+    echo "[✓] MariaDB already initialized. Running mariadb-upgrade..."
+    sudo mariadb-upgrade -u root --skip-write-binlog || true
+else
+    echo "[+] Running initial setup..."
+    sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
+fi
 
-echo "[+] Starting MariaDB in skip-grant-tables mode..."
+echo "[+] Resetting root password safely..."
 sudo mysqld_safe --skip-grant-tables & sleep 5
 
-echo "[+] Resetting root password..."
 mysql -u root <<EOF
 FLUSH PRIVILEGES;
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';
 EOF
 
 echo "[+] Restarting MariaDB normally..."
-sudo killall -9 mariadbd mysqld mysqld_safe
+sudo pkill -f mysqld_safe || true
+sudo pkill -f mariadbd || true
 sleep 2
 sudo systemctl start mariadb
 sudo systemctl enable mariadb
 
-echo "[+] Creating database and inserting default user..."
+echo "[+] Creating login_db and admin user..."
 HASHED_PASS=$(php -r "echo password_hash('admin123', PASSWORD_DEFAULT);")
 mysql -u root -proot <<EOF
 CREATE DATABASE IF NOT EXISTS login_db;
@@ -48,12 +52,12 @@ DELETE FROM users WHERE username='admin';
 INSERT INTO users (username, password) VALUES ('admin', '$HASHED_PASS');
 EOF
 
-echo "[+] Setting up web app in /var/www/html/login..."
+echo "[+] Preparing web root..."
 sudo mkdir -p /var/www/html/login
 sudo chown -R $USER:www-data /var/www/html/login
 sudo chmod -R 755 /var/www/html/login
 
-echo "[+] Making localhost redirect to login page..."
+echo "[+] Redirecting localhost to login page..."
 sudo rm -f /var/www/html/index.html
 echo '<meta http-equiv="refresh" content="0; URL=login/login.html">' | sudo tee /var/www/html/index.html > /dev/null
 
@@ -77,9 +81,7 @@ echo "[+] Writing login.html..."
 cat <<'HTML' | sudo tee /var/www/html/login/login.html > /dev/null
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Login</title>
-</head>
+<head><title>Login</title></head>
 <body>
     <h2>Login Page</h2>
     <form method="post" action="login.php">
@@ -91,7 +93,7 @@ cat <<'HTML' | sudo tee /var/www/html/login/login.html > /dev/null
 </html>
 HTML
 
-echo "[+] Writing login.php with session and redirect..."
+echo "[+] Writing login.php with session..."
 cat <<'PHP' | sudo tee /var/www/html/login/login.php > /dev/null
 <?php
 session_start();
@@ -116,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 PHP
 
-echo "[+] Writing dashboard.php with session protection..."
+echo "[+] Writing dashboard.php with login protection..."
 cat <<'PHP' | sudo tee /var/www/html/login/dashboard.php > /dev/null
 <?php
 session_start();
@@ -202,4 +204,4 @@ PHP
 echo "[+] Restarting Apache..."
 sudo systemctl restart apache2
 
-echo "[✓] Setup complete. Open http://localhost/ in your browser to test login!"
+echo "[✓] Setup complete! Go to: http://localhost/"
