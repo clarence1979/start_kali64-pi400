@@ -5,21 +5,18 @@ set -e
 echo "[+] Updating packages..."
 sudo apt update
 
-echo "[+] Installing Apache2, PHP, MariaDB..."
+echo "[+] Installing Apache2, PHP, and MariaDB..."
 sudo apt install apache2 php libapache2-mod-php php-mysql mariadb-server unzip -y
 
 echo "[+] Starting and enabling MariaDB..."
 sudo systemctl start mariadb
 sudo systemctl enable mariadb
 
-echo "[+] Securing MariaDB with root password..."
-sudo mysql -e "UPDATE mysql.user SET Password=PASSWORD('root') WHERE User='root';"
-sudo mysql -e "DELETE FROM mysql.user WHERE User='';"
-sudo mysql -e "DROP DATABASE IF EXISTS test;"
-sudo mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
-sudo mysql -e "FLUSH PRIVILEGES;"
+echo "[+] Setting root password properly (MariaDB >=10.4)..."
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'root';"
+sudo mysql -uroot -proot -e "FLUSH PRIVILEGES;"
 
-echo "[+] Creating login_db database and users table..."
+echo "[+] Creating login_db and users table..."
 hashed_pass=$(php -r "echo password_hash('admin123', PASSWORD_DEFAULT);")
 sudo mysql -uroot -proot <<EOF
 CREATE DATABASE IF NOT EXISTS login_db;
@@ -34,7 +31,6 @@ INSERT INTO users (username, password) VALUES ('admin', '$hashed_pass');
 EOF
 
 echo "[+] Creating /var/www/html/login directory..."
-
 if [ ! -d /var/www/html ]; then
     echo "[-] Apache web root not found. Is Apache installed correctly?"
     exit 1
@@ -100,4 +96,4 @@ PHP
 echo "[+] Restarting Apache..."
 sudo systemctl restart apache2
 
-echo "[✓] Setup complete. Visit http://localhost/login/login.html in your browser."
+echo "[✓] Setup complete. Access the login page at: http://localhost/login/login.html"
