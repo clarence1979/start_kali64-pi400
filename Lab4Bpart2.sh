@@ -28,10 +28,4 @@ sudo wireshark -k -Y "http" -i $WIFI_IFACE &
 echo "[✓] Wireshark is running. Capture HTTP POST traffic from another device."
 read -p "Press ENTER to stop monitoring and restore managed mode..."
 
-# Restore managed mode
-echo "[+] Restoring managed mode..."
-sudo ip link set $WIFI_IFACE down
-sudo iw $WIFI_IFACE set type managed
-sudo ip link set $WIFI_IFACE up
 
-echo "[✓] Interface $WIFI_IFACE restored to managed mode."
