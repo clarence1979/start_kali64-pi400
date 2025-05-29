@@ -1,5 +1,8 @@
 #!/bin/bash
 
+sudo dpkg-reconfigure wireshark-common
+sudo usermod -a -G wireshark kali
+
 # Automatically detect a wireless interface that supports monitor mode
 echo "[+] Detecting wireless interface..."
 WIFI_IFACE=$(iw dev | awk '$1=="Interface"{print $2}' | head -n 1)
