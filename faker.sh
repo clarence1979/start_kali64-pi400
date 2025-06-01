@@ -1,5 +1,12 @@
 #!/bin/bash
 
+echo "[*] Releasing any previously claimed AP interfaces..."
+for iface in $(ls /sys/class/net); do
+    sudo ip link set $iface down 2>/dev/null
+    sudo iw dev $iface set type managed 2>/dev/null
+    sudo ip link set $iface up 2>/dev/null
+done
+
 # Detect Wi-Fi interface supporting AP mode
 echo "[*] Detecting a suitable Wi-Fi interface for AP mode..."
 WIFI_INTERFACE=""
